@@ -7,7 +7,7 @@ from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
 ###########################################################################
 
 def get_k_folds(df: pd.DataFrame, k=10):
-    def valid_proportions(folds: list[pd.DataFrame]):
+    def valid_proportions(folds):
         fix_prop = df['malignancy'].value_counts(normalize=True, sort=False).to_dict()
         for fold in folds:
             fold_prop = fold['malignancy'].value_counts(normalize=True, sort=False).to_dict()
@@ -76,7 +76,7 @@ def k_fold_cv(model, df:pd.DataFrame, k=10, metric_funcs:list=[f1_score, accurac
 # model must be a TF Keras model and must have been compiled
 
 def k_fold_cv_keras(compiled_model, df:pd.DataFrame, k=10, metric_funcs:list=[f1_score, accuracy_score, roc_auc_score], num_epochs=10):
-    folds: list[pd.DataFrame] = get_k_folds(df, k)
+    folds = get_k_folds(df, k)
 
     metrics_results = dict((metric_fn.__name__, []) for metric_fn in metric_funcs)
 
@@ -114,7 +114,7 @@ def weighted_avg_and_std(values):
     return average, math.sqrt(variance)
 
 # returns a dataframe with the mean and standard deviation from the results of a K-fold CV
-def mean_std_results_k_fold_CV(k_fold_metrics_results: dict[str, list]):
+def mean_std_results_k_fold_CV(k_fold_metrics_results):
     results_df = pd.DataFrame(columns=['metric', 'mean', 'std'])
     for metric_name, metric_results in k_fold_metrics_results.items():
         mean, std = weighted_avg_and_std(np.array(metric_results))
