@@ -35,6 +35,8 @@ def get_k_folds(df: pd.DataFrame, k=10):
             folds[index].append(last_fold[last_fold['patient_id']==pid])
         folds = folds[0:-1]
     
+    for i in range(len(folds)):
+        folds[i].drop(columns=['patient_id'], inplace=True)
     return folds
 
 ###########################################################################
