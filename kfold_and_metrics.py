@@ -3,11 +3,11 @@ import numpy as np
 import math
 from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
 
-# returns a dicitonary with pairs (metric_name, list_of_results)
-# model must have .fit() and .predict() methods
-def k_fold_cv(model, df:pd.DataFrame, k=10, metric_funcs:list=[f1_score, accuracy_score, roc_auc_score]):
 
-    def valid_proportions(folds: list[pd.DataFrame]):
+###########################################################################
+
+def get_k_folds(df: pd.DataFrame, k=10):
+    def valid_proportions(folds):
         fix_prop = df['malignancy'].value_counts(normalize=True, sort=False).to_dict()
         for fold in folds:
             fold_prop = fold['malignancy'].value_counts(normalize=True, sort=False).to_dict()
@@ -34,9 +34,23 @@ def k_fold_cv(model, df:pd.DataFrame, k=10, metric_funcs:list=[f1_score, accurac
         for index, pid in enumerate(last_fold['patient_id'].unique()):
             folds[index].append(last_fold[last_fold['patient_id']==pid])
         folds = folds[0:-1]
+    
+    for i in range(len(folds)):
+        folds[i].drop(columns=['patient_id'], inplace=True)
+    return folds
 
+###########################################################################
+
+###########################################################################
+
+# returns a dicitonary with pairs (metric_name, list_of_results)
+# model must have .fit() and .predict() methods
+
+def k_fold_cv(model, df:pd.DataFrame, k=10, metric_funcs:list=[f1_score, accuracy_score, roc_auc_score]):
+    folds = get_k_folds(df, k)
+    
     metrics_results = dict((metric_fn.__name__, []) for metric_fn in metric_funcs)
-    metrics_results['weights'] = []
+
     for test_fold_index in range(len(folds)):
         testing_df = folds[test_fold_index]
         training_df = pd.DataFrame(columns=df.columns)
@@ -53,23 +67,59 @@ def k_fold_cv(model, df:pd.DataFrame, k=10, metric_funcs:list=[f1_score, accurac
 
         for metric_fn in metric_funcs:
             metrics_results[metric_fn.__name__].append(metric_fn(y_test, y_pred))
-        metrics_results['weights'].append(testing_df.shape[0] / df.shape[0])
         
     return metrics_results
 
-def weighted_avg_and_std(values, weights):
-    average = np.average(values, weights=weights)
-    variance = np.average((values-average)**2, weights=weights)
+###########################################################################
+
+###########################################################################
+
+# returns a dicitonary with pairs (metric_name, list_of_results)
+# model must be a TF Keras model and must have been compiled
+
+def k_fold_cv_keras(compiled_model, df:pd.DataFrame, k=10, metric_funcs:list=[f1_score, accuracy_score, roc_auc_score], num_epochs=10):
+    folds = get_k_folds(df, k)
+
+    metrics_results = dict((metric_fn.__name__, []) for metric_fn in metric_funcs)
+
+    for index, fold in enumerate(folds):
+        test_df = fold
+        train_df = pd.DataFrame(columns=fold.columns)
+        for i in range(len(folds)):
+            if i == index: continue
+            train_df.append(folds[i])
+        
+        x_train, y_train = train_df.drop(columns=['malignancy']).to_numpy(), np.array(list(map(lambda x: 1 if x==1 else 0, train_df['malignancy'].to_list()))).astype('float32')
+        x_test, y_test = test_df.drop(columns=['malignancy']).to_numpy(), np.array(list(map(lambda x: 1 if x==1 else 0, test_df['malignancy'].to_list()))).astype('float32')
+        
+        history = compiled_model.fit(
+            x_train, 
+            y_train, 
+            epochs=num_epochs,
+            batch_size=x_train.shape[0],
+            validation_data=(x_test,y_test)
+        )
+        y_pred = compiled_model.predict_classes(x_test, batch_size=x_test.shape[0])
+
+        for metric_fn in metric_funcs:
+            metrics_results[metric_fn.__name__].append(metric_fn(y_test, y_pred))        
+
+    return metrics_results
+
+###########################################################################
+
+###########################################################################
+
+def weighted_avg_and_std(values):
+    average = np.average(values)
+    variance = np.average((values-average)**2)
     return average, math.sqrt(variance)
 
 # returns a dataframe with the mean and standard deviation from the results of a K-fold CV
-def mean_std_results_k_fold_CV(k_fold_metrics_results: dict[str, list]):
+def mean_std_results_k_fold_CV(k_fold_metrics_results):
     results_df = pd.DataFrame(columns=['metric', 'mean', 'std'])
-    metrics_weights = np.array(k_fold_metrics_results['weights'])
     for metric_name, metric_results in k_fold_metrics_results.items():
-        if metric_name == 'weights':
-            continue
-        mean, std = weighted_avg_and_std(np.array(metric_results), weights=metrics_weights)
+        mean, std = weighted_avg_and_std(np.array(metric_results))
         results_df.append({
             'metric': metric_name,
             'mean': mean,
