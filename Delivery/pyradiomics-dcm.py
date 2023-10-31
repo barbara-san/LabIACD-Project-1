@@ -476,6 +476,8 @@ Support for DICOM Radiotherapy Structure Sets for defining region of interest ma
         'Initialization of the pyradimics feature extraction failed.', exc_info=True)
       return -1
 
+
+    # edits - b
     try:
       featureVector = extractor.execute(inputImage, inputSegment, int(segmentNumber))
     except ValueError:
@@ -486,7 +488,7 @@ Support for DICOM Radiotherapy Structure Sets for defining region of interest ma
       scriptlogger.error("No features extracted!")
       return -1
 
-    # edits
+    # edits - b
     featuresFileName = os.path.join(featuresDir, 'pyradiomics_features.csv')
     scriptlogger.debug("Will save features as %s", featuresFileName)
     writer = csv.writer(open(featuresFileName, 'a'), lineterminator='\n')
