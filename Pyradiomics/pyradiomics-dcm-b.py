@@ -328,7 +328,7 @@ Support for DICOM Radiotherapy Structure Sets for defining region of interest ma
   parser.add_argument(
     '--name',
     dest="patientname",
-    help="meow meow",
+    help="",
     required=True)
   parser.add_argument(
     '--input-image-dir',
@@ -484,22 +484,12 @@ Support for DICOM Radiotherapy Structure Sets for defining region of interest ma
       return -1
 
 
-    # abah = args.inputDICOMImageDir[10:14]
-    # featuresFileName = os.path.join(featuresDir, abah + '-1.csv')
-    featuresFileName = os.path.join(featuresDir, '1.csv')
-
-    #print(abah)
-    ''' counter = 1
-    while os.path.exists(featuresFileName):
-      counter += 1
-      featuresFileName = os.path.join(featuresDir, f"{abah}-{counter}.csv") '''
-
-
+    # edited part
+    featuresFileName = os.path.join(featuresDir, 'pyradiomics_features.csv')
 
     scriptlogger.debug("Will save features as %s", featuresFileName)
     writer = csv.writer(open(featuresFileName, 'a'), lineterminator='\n')
     headers = list(featureVector.keys())
-    # writer.writerow(headers)
     row = [args.patientname]
     for h in headers:
       row.append(featureVector.get(h, ""))
