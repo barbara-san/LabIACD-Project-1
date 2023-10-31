@@ -1,3 +1,6 @@
+#import warnings
+#warnings.simplefilter(action='ignore')
+
 import pandas as pd
 import numpy as np
 import math
@@ -57,7 +60,7 @@ def k_fold_cv(model, df:pd.DataFrame, k=10, metric_funcs:list=[f1_score, accurac
         for fold_index, fold_df in enumerate(folds):
             if fold_index == test_fold_index:
                 continue
-            training_df.append(fold_df)
+            training_df = pd.concat([training_df, fold_df])
 
         X_train, y_train = training_df.drop(columns=['malignancy']), training_df['malignancy']
         X_test, y_test = testing_df.drop(columns=['malignancy']), testing_df['malignancy']
@@ -87,22 +90,21 @@ def k_fold_cv_keras(compiled_model, df:pd.DataFrame, k=10, metric_funcs:list=[f1
         train_df = pd.DataFrame(columns=fold.columns)
         for i in range(len(folds)):
             if i == index: continue
-            train_df.append(folds[i])
+            train_df = pd.concat([train_df, fold], ignore_index=True)
         
-        x_train, y_train = train_df.drop(columns=['malignancy']).to_numpy(), np.array(list(map(lambda x: 1 if x==1 else 0, train_df['malignancy'].to_list()))).astype('float32')
-        x_test, y_test = test_df.drop(columns=['malignancy']).to_numpy(), np.array(list(map(lambda x: 1 if x==1 else 0, test_df['malignancy'].to_list()))).astype('float32')
-        
+        x_train, y_train = train_df.drop(columns=['malignancy']).to_numpy(dtype=np.float32), np.array(list(map(lambda x: 1 if x==1 else 0, train_df['malignancy'].to_list()))).astype('float32')
+        x_test, y_test = test_df.drop(columns=['malignancy']).to_numpy(dtype=np.float32), np.array(list(map(lambda x: 1 if x==1 else 0, test_df['malignancy'].to_list()))).astype('float32')
+                
         history = compiled_model.fit(
             x_train, 
             y_train, 
             epochs=num_epochs,
-            batch_size=x_train.shape[0],
-            validation_data=(x_test,y_test)
+            batch_size=x_train.shape[0]
         )
         y_pred = compiled_model.predict_classes(x_test, batch_size=x_test.shape[0])
 
         for metric_fn in metric_funcs:
-            metrics_results[metric_fn.__name__].append(metric_fn(y_test, y_pred))        
+            metrics_results[metric_fn.__name__].append(metric_fn(y_test, y_pred))
 
     return metrics_results
 
@@ -117,12 +119,13 @@ def weighted_avg_and_std(values):
 
 # returns a dataframe with the mean and standard deviation from the results of a K-fold CV
 def mean_std_results_k_fold_CV(k_fold_metrics_results):
-    results_df = pd.DataFrame(columns=['metric', 'mean', 'std'])
+    metrics_list = []
     for metric_name, metric_results in k_fold_metrics_results.items():
         mean, std = weighted_avg_and_std(np.array(metric_results))
-        results_df.append({
+        metrics_list.append({
             'metric': metric_name,
             'mean': mean,
             'std': std
         })
+    results_df = pd.DataFrame(data=metrics_list, columns=['metric', 'mean', 'std'])
     return results_df
