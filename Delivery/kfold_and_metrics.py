@@ -5,6 +5,7 @@ import pandas as pd
 import numpy as np
 import math
 from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
+from sklearn.preprocessing import LabelEncoder
 
 
 ###########################################################################
@@ -49,28 +50,38 @@ def get_k_folds(df: pd.DataFrame, k=10):
 # returns a dicitonary with pairs (metric_name, list_of_results)
 # model must have .fit() and .predict() methods
 
-def k_fold_cv(model, df:pd.DataFrame, k=10, metric_funcs:list=[f1_score, accuracy_score, roc_auc_score]):
+def k_fold_cv(model, df:pd.DataFrame, k=10, metric_funcs:list=[f1_score, accuracy_score, roc_auc_score], k_fold_verbose=False):
     folds = get_k_folds(df, k)
     
     metrics_results = dict((metric_fn.__name__, []) for metric_fn in metric_funcs)
 
+    first_verbose = k_fold_verbose
     for test_fold_index in range(len(folds)):
+        if first_verbose:
+            print("Performing K-Fold CV:", end="")
+            first_verbose = False
+        if k_fold_verbose:
+            print(f" {test_fold_index+1}", end="")
+
         testing_df = folds[test_fold_index]
-        training_df = pd.DataFrame(columns=df.columns)
+        training_df = pd.DataFrame(columns=folds[0].columns)
         for fold_index, fold_df in enumerate(folds):
             if fold_index == test_fold_index:
                 continue
-            training_df = pd.concat([training_df, fold_df])
+            training_df = pd.concat([training_df, fold_df], ignore_index=True)
 
-        X_train, y_train = training_df.drop(columns=['malignancy']), training_df['malignancy']
-        X_test, y_test = testing_df.drop(columns=['malignancy']), testing_df['malignancy']
+        label_encoder = LabelEncoder()
+        X_train, y_train = training_df.drop(columns=['malignancy']), label_encoder.fit_transform(training_df['malignancy'])
+        X_test, y_test = testing_df.drop(columns=['malignancy']), label_encoder.fit_transform(testing_df['malignancy'])
 
         model.fit(X_train, y_train)
         y_pred = model.predict(X_test)
 
         for metric_fn in metric_funcs:
             metrics_results[metric_fn.__name__].append(metric_fn(y_test, y_pred))
-        
+    
+    if k_fold_verbose:
+        print()
     return metrics_results
 
 ###########################################################################
@@ -80,12 +91,19 @@ def k_fold_cv(model, df:pd.DataFrame, k=10, metric_funcs:list=[f1_score, accurac
 # returns a dicitonary with pairs (metric_name, list_of_results)
 # model must be a TF Keras model and must have been compiled
 
-def k_fold_cv_keras(compiled_model, df:pd.DataFrame, k=10, metric_funcs:list=[f1_score, accuracy_score, roc_auc_score], num_epochs=10):
+def k_fold_cv_keras(compiled_model, df:pd.DataFrame, k=10, metric_funcs:list=[f1_score, accuracy_score, roc_auc_score], num_epochs=10, k_fold_verbose=False, keras_verbose=0):
     folds = get_k_folds(df, k)
 
     metrics_results = dict((metric_fn.__name__, []) for metric_fn in metric_funcs)
 
+    first_verbose = k_fold_verbose
     for index, fold in enumerate(folds):
+        if first_verbose:
+            print("Performing K-Fold CV:", end="")
+            first_verbose = False
+        if k_fold_verbose:
+            print(f" {index+1}", end="")
+
         test_df = fold
         train_df = pd.DataFrame(columns=fold.columns)
         for i in range(len(folds)):
@@ -99,13 +117,16 @@ def k_fold_cv_keras(compiled_model, df:pd.DataFrame, k=10, metric_funcs:list=[f1
             x_train, 
             y_train, 
             epochs=num_epochs,
-            batch_size=x_train.shape[0]
+            batch_size=x_train.shape[0],
+            verbose=keras_verbose
         )
-        y_pred = compiled_model.predict_classes(x_test, batch_size=x_test.shape[0])
+        y_pred = np.argmax(compiled_model.predict(x_test, batch_size=x_test.shape[0]), axis=-1) #compiled_model.predict_classes(x_test, batch_size=x_test.shape[0])
 
         for metric_fn in metric_funcs:
             metrics_results[metric_fn.__name__].append(metric_fn(y_test, y_pred))
 
+    if k_fold_verbose:
+        print()
     return metrics_results
 
 ###########################################################################
