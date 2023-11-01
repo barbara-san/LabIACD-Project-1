@@ -101,7 +101,7 @@ def k_fold_cv(model, df:pd.DataFrame, k=10, metric_funcs:list=[f1_score, accurac
 # returns a dicitonary with pairs (metric_name, list_of_results)
 # model must be a TF Keras model and must have been compiled
 
-def k_fold_cv_keras(compiled_model, df:pd.DataFrame, k=10, metric_funcs:list=[f1_score, accuracy_score, roc_auc_score], num_epochs=10, k_fold_verbose=False, keras_verbose=0):
+def k_fold_cv_keras(compiled_model, df:pd.DataFrame, k=10, metric_funcs:list=[f1_score, accuracy_score, roc_auc_score], num_epochs=10, k_fold_verbose=False, keras_verbose=0, pca_components=0):
     folds = get_k_folds(df, k)
 
     metrics_results = dict((metric_fn.__name__, []) for metric_fn in metric_funcs)
@@ -122,7 +122,15 @@ def k_fold_cv_keras(compiled_model, df:pd.DataFrame, k=10, metric_funcs:list=[f1
         
         x_train, y_train = train_df.drop(columns=['malignancy']).to_numpy(dtype=np.float32), np.array(list(map(lambda x: 1 if x==1 else 0, train_df['malignancy'].to_list()))).astype('float32')
         x_test, y_test = test_df.drop(columns=['malignancy']).to_numpy(dtype=np.float32), np.array(list(map(lambda x: 1 if x==1 else 0, test_df['malignancy'].to_list()))).astype('float32')
-                
+        
+        if pca_components > 0:
+            scaler = StandardScaler()
+            x_train = scaler.fit_transform(x_train)
+            x_test = scaler.fit_transform(x_test)
+            pca = PCA(n_components=pca_components)
+            x_train = pca.fit_transform(x_train)
+            x_test = pca.fit_transform(x_test)
+
         history = compiled_model.fit(
             x_train, 
             y_train, 
