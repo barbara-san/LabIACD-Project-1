@@ -5,7 +5,8 @@ import pandas as pd
 import numpy as np
 import math
 from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
-from sklearn.preprocessing import LabelEncoder
+from sklearn.preprocessing import LabelEncoder, StandardScaler
+from sklearn.decomposition import PCA
 
 
 ###########################################################################
@@ -41,6 +42,7 @@ def get_k_folds(df: pd.DataFrame, k=10):
     
     for i in range(len(folds)):
         folds[i].drop(columns=['patient_id'], inplace=True)
+
     return folds
 
 ###########################################################################
@@ -50,7 +52,7 @@ def get_k_folds(df: pd.DataFrame, k=10):
 # returns a dicitonary with pairs (metric_name, list_of_results)
 # model must have .fit() and .predict() methods
 
-def k_fold_cv(model, df:pd.DataFrame, k=10, metric_funcs:list=[f1_score, accuracy_score, roc_auc_score], k_fold_verbose=False):
+def k_fold_cv(model, df:pd.DataFrame, k=10, metric_funcs:list=[f1_score, accuracy_score, roc_auc_score], k_fold_verbose=False, pca_components=0):
     folds = get_k_folds(df, k)
     
     metrics_results = dict((metric_fn.__name__, []) for metric_fn in metric_funcs)
@@ -73,6 +75,14 @@ def k_fold_cv(model, df:pd.DataFrame, k=10, metric_funcs:list=[f1_score, accurac
         label_encoder = LabelEncoder()
         X_train, y_train = training_df.drop(columns=['malignancy']), label_encoder.fit_transform(training_df['malignancy'])
         X_test, y_test = testing_df.drop(columns=['malignancy']), label_encoder.fit_transform(testing_df['malignancy'])
+
+        if pca_components > 0:
+            scaler = StandardScaler()
+            X_train = scaler.fit_transform(X_train)
+            X_test = scaler.fit_transform(X_test)
+            pca = PCA(n_components=pca_components)
+            X_train = pca.fit_transform(X_train)
+            X_test = pca.fit_transform(X_test)
 
         model.fit(X_train, y_train)
         y_pred = model.predict(X_test)
