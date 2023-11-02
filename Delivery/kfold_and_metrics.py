@@ -4,14 +4,14 @@ warnings.simplefilter(action='ignore')
 import pandas as pd
 import numpy as np
 import math
-from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
+from sklearn.metrics import accuracy_score, f1_score, roc_auc_score, confusion_matrix, ConfusionMatrixDisplay
 from sklearn.preprocessing import LabelEncoder, StandardScaler
 from sklearn.decomposition import PCA
 
 
 ###########################################################################
 
-def get_k_folds(df: pd.DataFrame, k=10):
+def get_k_folds(df: pd.DataFrame, k=10, seed=1):
     def valid_proportions(folds):
         fix_prop = df['malignancy'].value_counts(normalize=True, sort=False).to_dict()
         for fold in folds:
@@ -26,7 +26,7 @@ def get_k_folds(df: pd.DataFrame, k=10):
     folds = []
     pid_list = df['patient_id'].unique()
     while True:
-        shuffled_pid_list = pd.Series(pid_list).sample(frac=1).to_list()
+        shuffled_pid_list = pd.Series(pid_list).sample(frac=1, random_state=seed).to_list()
         for pid in range(0, len(pid_list), len(pid_list)//k):
             pid_fold = shuffled_pid_list[pid : pid+len(pid_list)//k]
             fold_df = df[df['patient_id'].isin(pid_fold)]
@@ -34,6 +34,7 @@ def get_k_folds(df: pd.DataFrame, k=10):
         
         if valid_proportions(folds): break
         else: folds = []
+
     if len(folds) == k+1:
         last_fold = folds[-1]
         for index, pid in enumerate(last_fold['patient_id'].unique()):
@@ -52,8 +53,8 @@ def get_k_folds(df: pd.DataFrame, k=10):
 # returns a dicitonary with pairs (metric_name, list_of_results)
 # model must have .fit() and .predict() methods
 
-def k_fold_cv(model, df:pd.DataFrame, k=10, metric_funcs:list=[f1_score, accuracy_score, roc_auc_score], k_fold_verbose=False, pca_components=0):
-    folds = get_k_folds(df, k)
+def k_fold_cv(model, df:pd.DataFrame, k=10, metric_funcs:list=[f1_score, accuracy_score, roc_auc_score], k_fold_verbose=False, pca_components=0, show_confusion_matrix=False, seed=1):
+    folds = get_k_folds(df, k, seed)
     
     metrics_results = dict((metric_fn.__name__, []) for metric_fn in metric_funcs)
 
@@ -87,6 +88,11 @@ def k_fold_cv(model, df:pd.DataFrame, k=10, metric_funcs:list=[f1_score, accurac
         model.fit(X_train, y_train)
         y_pred = model.predict(X_test)
 
+        if show_confusion_matrix:
+            cm = confusion_matrix(y_test, y_pred)
+            disp = ConfusionMatrixDisplay(confusion_matrix=cm)
+            disp.plot()
+
         for metric_fn in metric_funcs:
             metrics_results[metric_fn.__name__].append(metric_fn(y_test, y_pred))
     
@@ -101,12 +107,13 @@ def k_fold_cv(model, df:pd.DataFrame, k=10, metric_funcs:list=[f1_score, accurac
 # returns a dicitonary with pairs (metric_name, list_of_results)
 # model must be a TF Keras model and must have been compiled
 
-def k_fold_cv_keras(compiled_model, df:pd.DataFrame, k=10, metric_funcs:list=[f1_score, accuracy_score, roc_auc_score], num_epochs=10, k_fold_verbose=False, keras_verbose=0, pca_components=0):
-    folds = get_k_folds(df, k)
+def k_fold_cv_keras(compiled_model, df:pd.DataFrame, k=10, metric_funcs:list=[f1_score, accuracy_score, roc_auc_score], num_epochs=10, k_fold_verbose=False, keras_verbose=0, pca_components=0, show_confusion_matrix=False, seed=1):
+    folds = get_k_folds(df, k, seed)
 
     metrics_results = dict((metric_fn.__name__, []) for metric_fn in metric_funcs)
 
     first_verbose = k_fold_verbose
+    cm_list = []
     for index, fold in enumerate(folds):
         if first_verbose:
             print("Performing K-Fold CV:", end="")
@@ -140,8 +147,20 @@ def k_fold_cv_keras(compiled_model, df:pd.DataFrame, k=10, metric_funcs:list=[f1
         )
         y_pred = np.argmax(compiled_model.predict(x_test, batch_size=x_test.shape[0]), axis=-1) #compiled_model.predict_classes(x_test, batch_size=x_test.shape[0])
 
+        if show_confusion_matrix:
+            cm_list.append(confusion_matrix(y_test, y_pred))
+            
         for metric_fn in metric_funcs:
             metrics_results[metric_fn.__name__].append(metric_fn(y_test, y_pred))
+
+    if show_confusion_matrix:
+        mean_cm = np.array([[0,0],
+                            [0,0]])
+        for cm in cm_list:
+            mean_cm += cm
+        mean_cm = mean_cm * 100 // df.shape[0]
+        disp = ConfusionMatrixDisplay(confusion_matrix=mean_cm)
+        disp.plot()
 
     if k_fold_verbose:
         print()
