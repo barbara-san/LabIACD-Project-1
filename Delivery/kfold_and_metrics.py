@@ -59,6 +59,7 @@ def k_fold_cv(model, df:pd.DataFrame, k=10, metric_funcs:list=[f1_score, accurac
     metrics_results = dict((metric_fn.__name__, []) for metric_fn in metric_funcs)
 
     first_verbose = k_fold_verbose
+    cm_list = []
     for test_fold_index in range(len(folds)):
         if first_verbose:
             print("Performing K-Fold CV:", end="")
@@ -89,13 +90,26 @@ def k_fold_cv(model, df:pd.DataFrame, k=10, metric_funcs:list=[f1_score, accurac
         y_pred = model.predict(X_test)
 
         if show_confusion_matrix:
-            cm = confusion_matrix(y_test, y_pred)
-            disp = ConfusionMatrixDisplay(confusion_matrix=cm)
-            disp.plot()
+            cm_list.append(confusion_matrix(y_test, y_pred))
+            
 
         for metric_fn in metric_funcs:
             metrics_results[metric_fn.__name__].append(metric_fn(y_test, y_pred))
     
+    if show_confusion_matrix:
+        mean_cm = np.array([[0,0],
+                            [0,0]])
+        total = 0
+        for cm in cm_list:
+            for i in range(2):
+                for j in range(2):
+                    mean_cm[i][j] += cm[i][j]
+                    total += cm[i][j]
+        mean_cm = mean_cm / total * 100
+        mean_cm = mean_cm.round(decimals=0)
+        disp = ConfusionMatrixDisplay(confusion_matrix=mean_cm)
+        disp.plot()
+
     if k_fold_verbose:
         print()
     return metrics_results
@@ -156,9 +170,14 @@ def k_fold_cv_keras(compiled_model, df:pd.DataFrame, k=10, metric_funcs:list=[f1
     if show_confusion_matrix:
         mean_cm = np.array([[0,0],
                             [0,0]])
+        total = 0
         for cm in cm_list:
-            mean_cm += cm
-        mean_cm = mean_cm * 100 // df.shape[0]
+            for i in range(2):
+                for j in range(2):
+                    mean_cm[i][j] += cm[i][j]
+                    total += cm[i][j]
+        mean_cm = mean_cm / total * 100
+        mean_cm = mean_cm.round(decimals=0)
         disp = ConfusionMatrixDisplay(confusion_matrix=mean_cm)
         disp.plot()
 
