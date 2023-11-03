@@ -8,6 +8,8 @@ from sklearn.metrics import accuracy_score, f1_score, roc_auc_score, confusion_m
 from sklearn.preprocessing import LabelEncoder, StandardScaler
 from sklearn.decomposition import PCA
 
+np.random.seed(42)
+
 
 ###########################################################################
 
@@ -82,7 +84,7 @@ def k_fold_cv(model, df:pd.DataFrame, k=10, metric_funcs:list=[f1_score, accurac
             scaler = StandardScaler()
             X_train = scaler.fit_transform(X_train)
             X_test = scaler.fit_transform(X_test)
-            pca = PCA(n_components=pca_components)
+            pca = PCA(n_components=pca_components, random_state=42)
             X_train = pca.fit_transform(X_train)
             X_test = pca.fit_transform(X_test)
 
@@ -148,7 +150,7 @@ def k_fold_cv_keras(compiled_model, df:pd.DataFrame, k=10, metric_funcs:list=[f1
             scaler = StandardScaler()
             x_train = scaler.fit_transform(x_train)
             x_test = scaler.fit_transform(x_test)
-            pca = PCA(n_components=pca_components)
+            pca = PCA(n_components=pca_components, random_state=42)
             x_train = pca.fit_transform(x_train)
             x_test = pca.fit_transform(x_test)
 
