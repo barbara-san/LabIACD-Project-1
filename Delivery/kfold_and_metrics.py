@@ -1,3 +1,4 @@
+# imports
 import warnings
 warnings.simplefilter(action='ignore')
 
@@ -8,12 +9,36 @@ from sklearn.metrics import accuracy_score, f1_score, roc_auc_score, confusion_m
 from sklearn.preprocessing import LabelEncoder, StandardScaler
 from sklearn.decomposition import PCA
 
+# setting a numpy seed
 np.random.seed(42)
 
 
 ###########################################################################
+"""
+get_k_folds: Split a DataFrame into k folds for cross-validation, ensuring balanced class proportions 
+and ensuring all annotations from a certain patient are kept in the same fold.
 
-def get_k_folds(df: pd.DataFrame, k=10, seed=1):
+Parameters:
+- df (pd.DataFrame): The DataFrame to be split into folds.
+- k (int, optional): The number of folds (default is 10).
+- seed (int, optional): Random seed for reproducibility (default is None).
+
+Returns:
+- List of DataFrames: A list containing k folds of the input DataFrame.
+
+This function takes a DataFrame and splits it into k folds for cross-validation while ensuring that the 
+proportion of samples in each class (malignancy) is balanced across all folds, and ensuring no sample 
+from the same patient is in a different fold. It does this by shuffling the data and assigning patients 
+to folds, ensuring that each fold has approximately the same distribution of malignancy classes.
+
+Notes:
+- If it's not possible to achieve balanced class proportions, the function will reattempt the split until 
+it succeeds.
+- The 'patient_id' column is removed from the resulting folds as it is a categorical, not decisive 
+for the target feature.
+"""
+
+def get_k_folds(df, k=10, seed=None):
     def valid_proportions(folds):
         fix_prop = df['malignancy'].value_counts(normalize=True, sort=False).to_dict()
         for fold in folds:
@@ -49,13 +74,38 @@ def get_k_folds(df: pd.DataFrame, k=10, seed=1):
     return folds
 
 ###########################################################################
+"""
+k_fold_cv: Perform k-fold cross-validation for a machine learning model with various evaluation metrics.
 
-###########################################################################
+Parameters:
+- model: An instance of a machine learning model that has .fit() and .predict() methods.
+- df (pd.DataFrame): The DataFrame containing the dataset to be used for cross-validation.
+- k (int, optional): The number of folds for cross-validation (default is 10).
+- metric_funcs (list, optional): List of evaluation metrics functions to apply (default includes F1 score, 
+accuracy, and ROC AUC score).
+- k_fold_verbose (bool, optional): Whether to print verbose information during the k-fold process (default 
+is False).
+- pca_components (int, optional): The number of PCA components to use for dimensionality reduction (default 
+is 0, no PCA).
+- show_confusion_matrix (bool, optional): Whether to display an average confusion matrix (default is False).
+- seed (int, optional): Random seed for reproducibility (default is 1).
 
-# returns a dicitonary with pairs (metric_name, list_of_results)
-# model must have .fit() and .predict() methods
+Returns:
+- Dictionary: A dictionary containing evaluation metrics as keys and lists of results for each fold as values.
 
-def k_fold_cv(model, df:pd.DataFrame, k=10, metric_funcs:list=[f1_score, accuracy_score, roc_auc_score], k_fold_verbose=False, pca_components=0, show_confusion_matrix=False, seed=1):
+This function performs k-fold cross-validation for a machine learning model using the specified evaluation 
+metrics. It divides the input DataFrame into k folds, trains the model on k-1 folds, and evaluates it on 
+the remaining fold. The evaluation metrics are calculated for each fold, and the results are stored in a 
+dictionary.
+
+Notes:
+- If show_confusion_matrix is set to True, a confusion matrix constituted by the average values of the confusion 
+matrices that would be produced in each fold will be displayed for the folds.
+- Considering there is a default seed set to 1, the folds received and used for cross-validation will always 
+be deterministic. This can be changed by setting the seed to None.
+"""
+
+def k_fold_cv(model, df, k=10, metric_funcs=[f1_score, accuracy_score, roc_auc_score], k_fold_verbose=False, pca_components=0, show_confusion_matrix=False, seed=1):
     folds = get_k_folds(df, k, seed)
     
     metrics_results = dict((metric_fn.__name__, []) for metric_fn in metric_funcs)
@@ -117,13 +167,41 @@ def k_fold_cv(model, df:pd.DataFrame, k=10, metric_funcs:list=[f1_score, accurac
     return metrics_results
 
 ###########################################################################
+"""
+k_fold_cv_keras: Perform k-fold cross-validation for a TensorFlow Keras model with various evaluation metrics.
 
-###########################################################################
+Parameters:
+- compiled_model: A compiled TensorFlow Keras model.
+- df (pd.DataFrame): The DataFrame containing the dataset to be used for cross-validation.
+- k (int, optional): The number of folds for cross-validation (default is 10).
+- metric_funcs (list, optional): List of evaluation metrics functions to apply (default includes F1 score, 
+accuracy, and ROC AUC score).
+- num_epochs (int, optional): The number of training epochs for each fold (default is 10).
+- k_fold_verbose (bool, optional): Whether to print verbose information during the k-fold process (default 
+is False).
+- keras_verbose (int, optional): Keras verbose level for model training (default is 0, training progress not 
+shown).
+- pca_components (int, optional): The number of PCA components to use for dimensionality reduction (default 
+is 0, no PCA).
+- show_confusion_matrix (bool, optional): Whether to display an average confusion matrix (default is False).
+- seed (int, optional): Random seed for reproducibility (default is 1).
 
-# returns a dicitonary with pairs (metric_name, list_of_results)
-# model must be a TF Keras model and must have been compiled
+Returns:
+- Dictionary: A dictionary containing evaluation metrics as keys and lists of results for each fold as values.
 
-def k_fold_cv_keras(compiled_model, df:pd.DataFrame, k=10, metric_funcs:list=[f1_score, accuracy_score, roc_auc_score], num_epochs=10, k_fold_verbose=False, keras_verbose=0, pca_components=0, show_confusion_matrix=False, seed=1):
+This function performs k-fold cross-validation for a TensorFlow Keras model using the specified evaluation 
+metrics. It divides the input DataFrame into k folds, trains the model on k-1 folds, and evaluates it on the 
+remaining fold. The evaluation metrics are calculated for each fold, and the results are stored in a dictionary.
+
+Notes:   
+- If show_confusion_matrix is set to True, a confusion matrix constituted by the average values of the confusion 
+matrices that would be produced in each fold will be displayed for the folds.
+- Considering there is a default seed set to 1, the folds received and used for cross-validation will always 
+be deterministic. This can be changed by setting the seed to None.
+- The model must use the softmax activation function on the output layer.
+"""
+
+def k_fold_cv_keras(compiled_model, df, k=10, metric_funcs=[f1_score, accuracy_score, roc_auc_score], num_epochs=10, k_fold_verbose=False, keras_verbose=0, pca_components=0, show_confusion_matrix=False, seed=1):
     folds = get_k_folds(df, k, seed)
 
     metrics_results = dict((metric_fn.__name__, []) for metric_fn in metric_funcs)
@@ -188,19 +266,45 @@ def k_fold_cv_keras(compiled_model, df:pd.DataFrame, k=10, metric_funcs:list=[f1
     return metrics_results
 
 ###########################################################################
+"""
+avg_and_std: Calculate the average and standard deviation of a list of values.
 
-###########################################################################
+Parameters:
+- values (numpy array): A list of numeric values.
 
-def weighted_avg_and_std(values):
+Returns:
+- Float: the average of the input values.
+- Float: the standard deviation of the input values.
+
+This function takes a list of numeric values and computes their average and standard deviation.
+"""
+
+def avg_and_std(values):
     average = np.average(values)
     variance = np.average((values-average)**2)
     return average, math.sqrt(variance)
 
-# returns a dataframe with the mean and standard deviation from the results of a K-fold CV
+###########################################################################
+"""
+mean_std_results_k_fold_CV: Calculate the mean and standard deviation of evaluation metrics from K-fold 
+cross-validation results.
+
+Parameters:
+- k_fold_metrics_results (dictionary): A dictionary containing evaluation metrics and their results from 
+K-fold cross-validation.
+
+Returns:
+- pd.DataFrame: A DataFrame with metric names, mean values, and standard deviations.
+
+This function takes a dictionary of evaluation metrics and their results obtained from K-fold 
+cross-validation and calculates the mean and standard deviation of each metric's results and returns 
+them in a DataFrame.
+"""
+
 def mean_std_results_k_fold_CV(k_fold_metrics_results):
     metrics_list = []
     for metric_name, metric_results in k_fold_metrics_results.items():
-        mean, std = weighted_avg_and_std(np.array(metric_results))
+        mean, std = avg_and_std(np.array(metric_results))
         metrics_list.append({
             'metric': metric_name,
             'mean': mean,
